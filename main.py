@@ -9,10 +9,6 @@ from tensorflow.dtensor.python.numpy_util import to_numpy
 # Load and preprocess
 data_files = ['csv files/house2_mod.csv',
               'csv files/house3_mod.csv',
-              'csv files/house4_mod.csv',
-              'csv files/house15_mod.csv',
-              #'csv files/house21_mod.csv',
-              #'csv files/house9_mod.csv',
               'csv files/house10_mod.csv',
               ]
 
@@ -50,8 +46,8 @@ house_segments = [(i * rows_to_keep, (i + 1) * rows_to_keep) for i in range(len(
 train_indices = np.concatenate([np.arange(*house_segments[i]) for i in range(len(data_files)-1)])
 #eval_indices = np.arange(*house_segments[4])
 # Test: select specific days from last house in data_files list
-test_start = house_segments[4][0] + 1 * 86400 # Start of day 3
-test_end = house_segments[4][0] + 4 * 86400    # End of day 4
+test_start = house_segments[2][0] + 1 * 86400 # Start of day 3
+test_end = house_segments[2][0] + 4 * 86400    # End of day 4
 test_indices = np.arange(test_start, test_end)
 
 X_train_raw, y_train_raw = X[train_indices], y[train_indices]
