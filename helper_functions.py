@@ -24,22 +24,31 @@ def reconstruct_signals(wp_list, coeffs_array, original_length):
         reconstructed_signals.append(reconstructed_signal[:original_length])
     return np.column_stack(reconstructed_signals)
 
-# 3. Create LSTM-compatible sequences
-def create_sequences(X, y, seq_length=64):
+# Create sequences
+def create_sequences(X, y, seq_length, step):
     X_seq, y_seq = [], []
-    for i in range(len(X) - seq_length + 1):
+    for i in range(0, len(X) - seq_length + 1, step):
         X_seq.append(X[i:i+seq_length])
         y_seq.append(y[i:i+seq_length])
     return np.array(X_seq), np.array(y_seq)
 
-# 4. Revert sequences to full-length signal
-def revert_sequences(sequences, seq_length):
+
+# Reconstruct original signal
+def revert_sequences(sequences, seq_length, step):
     num_samples, _, num_features = sequences.shape
-    original_length = num_samples + seq_length - 1
+    # Calculate the length of the reconstructed signal based on step size
+    original_length = (num_samples - 1) * step + seq_length
     reconstructed = np.zeros((original_length, num_features))
     counts = np.zeros((original_length, 1))
+
     for i in range(num_samples):
-        reconstructed[i:i + seq_length] += sequences[i]
-        counts[i:i + seq_length] += 1
+        start = i * step
+        end = start + seq_length
+        reconstructed[start:end] += sequences[i]
+        counts[start:end] += 1
+
+    # Avoid division by zero
+    counts[counts == 0] = 1
     reconstructed /= counts
     return reconstructed
+
