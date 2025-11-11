@@ -23,6 +23,7 @@ max_vals = np.array([test_scaler["max"][col] for col in ['st', 'wh', 'wm', 'frid
 # ========== APPLY TO PREDICTIONS & REAL VALUES ==========
 y_pred = invert_minmax(y_pred, min_vals, max_vals)
 y_test = invert_minmax(y_test, min_vals, max_vals)
+
 accuracy = r2_score(y_test, y_pred)
 
 print(accuracy)
