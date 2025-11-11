@@ -6,35 +6,51 @@ import tensorflow as tf
 from sklearn.metrics import r2_score
 
 # ===================== CONFIGURATION ===================== #
-
 data_files = [
     'csv files/house2_mod.csv',
-    'csv files/house3_mod.csv',
+    'csv files/house12_mod.csv',
+    'csv files/house15_mod.csv',
+    'csv files/house17_mod.csv',
+    'csv files/house18_mod.csv',
+    'csv files/house20_mod.csv',
     'csv files/house10_mod.csv',
 ]
 
 columns = ['agg', 'agg_act', 'st', 'wh', 'wm', 'fridge']
-days_to_keep = 8
+days_to_keep = 5
 seconds_per_day = 86400
 rows_to_keep = days_to_keep * seconds_per_day
 
 sequence_length = 128  # LSTM sequence length
 
 # ===================== FUNCTIONS ===================== #
+def shuffle_days_across_houses(dfs, day_length=86400):
+    """
+    Shuffle full-day blocks across multiple houses.
+    """
+    all_days = []
+    day_house_map = []
 
-def shuffle_days(df, day_length=86400):
-    """
-    Shuffle full-day blocks inside a DataFrame.
-    """
-    num_days = len(df) // day_length
-    days = [df.iloc[i*day_length:(i+1)*day_length] for i in range(num_days)]
-    np.random.shuffle(days)
-    return pd.concat(days, ignore_index=True)
+    # Extract days from all houses
+    for house_idx, df in enumerate(dfs):
+        num_days = len(df) // day_length
+        days = [df.iloc[i*day_length:(i+1)*day_length] for i in range(num_days)]
+        all_days.extend(days)
+        day_house_map.extend([house_idx]*num_days)
+
+    # Shuffle the days globally
+    perm = np.random.permutation(len(all_days))
+    shuffled_days = [all_days[i] for i in perm]
+    shuffled_house_map = np.random.choice(range(len(dfs)), size=len(shuffled_days))
+
+    # Recombine into new DataFrames for each house
+    new_dfs = [pd.DataFrame(columns=dfs[0].columns) for _ in dfs]
+    for day, house_idx in zip(shuffled_days, shuffled_house_map):
+        new_dfs[house_idx] = pd.concat([new_dfs[house_idx], day], ignore_index=True)
+
+    return new_dfs
 
 def plot_house(df, house_name):
-    """
-    Plot all appliance columns for a single house on one figure.
-    """
     plt.figure(figsize=(14, 5))
     for col in df.columns:
         plt.plot(df[col], label=col, linewidth=0.8)
@@ -46,9 +62,6 @@ def plot_house(df, house_name):
     plt.show()
 
 def create_sequences(X, y, seq_length):
-    """
-    Convert raw data into overlapping sequences for LSTM training.
-    """
     X_seq, y_seq = [], []
     for i in range(len(X) - seq_length):
         X_seq.append(X[i:i+seq_length])
@@ -56,24 +69,17 @@ def create_sequences(X, y, seq_length):
     return np.array(X_seq), np.array(y_seq)
 
 def revert_sequences(sequences, seq_length):
-    """
-    Reconstruct original time series from overlapping windows.
-    """
     num_samples, _, num_features = sequences.shape
     original_length = num_samples + seq_length - 1
     reconstructed = np.zeros((original_length, num_features))
     counts = np.zeros((original_length, 1))
-
     for i in range(num_samples):
-        reconstructed[i:i + seq_length] += sequences[i]
-        counts[i:i + seq_length] += 1
-
+        reconstructed[i:i+seq_length] += sequences[i]
+        counts[i:i+seq_length] += 1
     reconstructed /= counts
     return reconstructed
 
-
 # ===================== LOAD + PREPROCESS ===================== #
-
 df_list = []
 agg_means = []
 
@@ -94,13 +100,17 @@ with open("files/agg_means.json", "w") as json_file:
 for df, name in zip(df_list, data_files):
     plot_house(df, name)
 
-# ===================== SHUFFLE TRAINING HOUSES ONLY ===================== #
-for i in range(len(df_list) - 1):  # all except last (test)
-    df_list[i] = shuffle_days(df_list[i], seconds_per_day)
+# ===================== SHUFFLE DAYS ACROSS TRAINING HOUSES ===================== #
+# Exclude last house for testing
+#df_list[:-1] = shuffle_days_across_houses(df_list[:-1], seconds_per_day)
+
+# ===================== PLOT EACH HOUSE AFTER SHUFFLING ===================== #
+
+#for df, name in zip(df_list[:-1], data_files[:-1]):
+#    plot_house(df, name + " (after shuffle)")
 
 # ===================== COMBINE DATA ===================== #
 data = pd.concat(df_list, ignore_index=True).to_numpy()
-
 X = data[:, :2]  # agg, agg_act
 y = data[:, 2:]  # appliances
 
@@ -139,7 +149,7 @@ model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
 early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 
-model.fit(X_train, y_train, validation_split=0.1, epochs=5, batch_size=128, callbacks=[early_stop])
+model.fit(X_train, y_train, validation_split=0.1, epochs=1, batch_size=128, callbacks=[early_stop])
 
 # ===================== EVALUATION ===================== #
 eval_loss, eval_mae = model.evaluate(X_test, y_test)
@@ -156,4 +166,5 @@ print("R² Score Accuracy:", accuracy)
 # ===================== SAVE RESULTS ===================== #
 np.savetxt('csv files/predictions.csv', y_pred_reconstructed, delimiter=',')
 np.savetxt('csv files/real_values.csv', y_test_reconstructed, delimiter=',')
+
 
