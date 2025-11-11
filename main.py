@@ -20,7 +20,6 @@ columns = ['agg', 'agg_act', 'st', 'wh', 'wm', 'fridge']
 days_to_keep = 5
 seconds_per_day = 86400
 rows_to_keep = days_to_keep * seconds_per_day
-
 sequence_length = 128  # LSTM sequence length
 
 # ===================== FUNCTIONS ===================== #
@@ -81,20 +80,26 @@ def revert_sequences(sequences, seq_length):
 
 # ===================== LOAD + PREPROCESS ===================== #
 df_list = []
-agg_means = []
+scalers = []   # store min/max values so we can revert predictions later
 
 for f in data_files:
     df = pd.read_csv(f).head(rows_to_keep)
     df = df[[col for col in columns if col in df.columns]]
-    df = df.reindex(columns=columns)  # keep same column order & fill missing
-    mean_agg = df["agg"].mean()
-    agg_means.append(mean_agg)
-    df = df / mean_agg
+    df = df.reindex(columns=columns)
+
+    # record min and max for each column
+    min_vals = df.min()
+    max_vals = df.max()
+    scalers.append({"min": min_vals.to_dict(), "max": max_vals.to_dict()})
+
+    # Min-Max Normalization: (x - min) / (max - min)
+    df = (df - min_vals) / (max_vals - min_vals + 1e-8)
+
     df_list.append(df)
 
-# Save normalization means
-with open("files/agg_means.json", "w") as json_file:
-    json.dump(agg_means, json_file)
+# Save scalers to restore original values later if needed
+with open("files/minmax_scalers.json", "w") as json_file:
+    json.dump(scalers, json_file)
 
 # ===================== PLOT EACH HOUSE BEFORE SHUFFLING ===================== #
 for df, name in zip(df_list, data_files):
@@ -102,12 +107,12 @@ for df, name in zip(df_list, data_files):
 
 # ===================== SHUFFLE DAYS ACROSS TRAINING HOUSES ===================== #
 # Exclude last house for testing
-#df_list[:-1] = shuffle_days_across_houses(df_list[:-1], seconds_per_day)
+df_list[:-1] = shuffle_days_across_houses(df_list[:-1], seconds_per_day)
 
 # ===================== PLOT EACH HOUSE AFTER SHUFFLING ===================== #
 
-#for df, name in zip(df_list[:-1], data_files[:-1]):
-#    plot_house(df, name + " (after shuffle)")
+for df, name in zip(df_list[:-1], data_files[:-1]):
+    plot_house(df, name + " (after shuffle)")
 
 # ===================== COMBINE DATA ===================== #
 data = pd.concat(df_list, ignore_index=True).to_numpy()
