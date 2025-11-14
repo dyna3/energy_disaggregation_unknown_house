@@ -4,20 +4,21 @@ import json
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from sklearn.metrics import r2_score
+from sklearn.utils import shuffle
 
 # ===================== CONFIGURATION ===================== #
 data_files = [
     'csv files/house2_mod.csv',
-    'csv files/house12_mod.csv',
-    'csv files/house15_mod.csv',
-    'csv files/house17_mod.csv',
-    'csv files/house18_mod.csv',
-    'csv files/house20_mod.csv',
     'csv files/house10_mod.csv',
+    'csv files/house4_mod.csv',
+    #'csv files/house17_mod.csv',
+    #'csv files/house18_mod.csv',
+    'csv files/house20_mod.csv',
+    'csv files/house12_mod.csv',
 ]
 
 columns = ['agg', 'agg_act', 'st', 'wh', 'wm', 'fridge']
-days_to_keep = 5
+days_to_keep = 7
 seconds_per_day = 86400
 rows_to_keep = days_to_keep * seconds_per_day
 sequence_length = 128  # LSTM sequence length
@@ -102,18 +103,18 @@ with open("files/minmax_scalers.json", "w") as json_file:
     json.dump(scalers, json_file)
 
 # ===================== PLOT EACH HOUSE BEFORE SHUFFLING ===================== #
-for df, name in zip(df_list, data_files):
-    plot_house(df, name)
+#for df, name in zip(df_list, data_files):
+#    plot_house(df, name)
 
 # ===================== SHUFFLE DAYS ACROSS TRAINING HOUSES ===================== #
 # Exclude last house for testing
-df_list[:-1] = shuffle_days_across_houses(df_list[:-1], seconds_per_day)
+#df_list[:-1] = shuffle_days_across_houses(df_list[:-1], seconds_per_day)
 
 # ===================== PLOT EACH HOUSE AFTER SHUFFLING ===================== #
-
+"""
 for df, name in zip(df_list[:-1], data_files[:-1]):
     plot_house(df, name + " (after shuffle)")
-
+"""
 # ===================== COMBINE DATA ===================== #
 data = pd.concat(df_list, ignore_index=True).to_numpy()
 X = data[:, :2]  # agg, agg_act
@@ -128,7 +129,7 @@ test_start = house_segments[-1][0] + 1 * seconds_per_day
 test_end   = house_segments[-1][0] + 4 * seconds_per_day
 test_indices = np.arange(test_start, test_end)
 
-X_train_raw, y_train_raw = X[train_indices], y[train_indices]
+X_train_raw, y_train_raw = shuffle(X[train_indices], y[train_indices])
 X_test_raw, y_test_raw = X[test_indices], y[test_indices]
 
 # ===================== SEQUENCE CREATION ===================== #
@@ -154,7 +155,7 @@ model.compile(optimizer='adam', loss='mse', metrics=['mae'])
 
 early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
 
-model.fit(X_train, y_train, validation_split=0.1, epochs=1, batch_size=128, callbacks=[early_stop])
+model.fit(X_train, y_train, validation_split=0.1, epochs=3, batch_size=128, callbacks=[early_stop])
 
 # ===================== EVALUATION ===================== #
 eval_loss, eval_mae = model.evaluate(X_test, y_test)
